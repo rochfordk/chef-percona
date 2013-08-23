@@ -60,8 +60,16 @@ wsrep_slave_threads            = <%= node["percona"]["cluster"]["wsrep_slave_thr
 wsrep_cluster_name             = <%= node["percona"]["cluster"]["wsrep_cluster_name"] %>
 wsrep_sst_method               = <%= node["percona"]["cluster"]["wsrep_sst_method"] %>
 wsrep_sst_auth                 = <%= node["percona"]["cluster"]["wsrep_sst_auth"] %>
+<% if !node["percona"]["cluster"]["wsrep_node_name"].empty? %>
 wsrep_node_name                = <%= node["percona"]["cluster"]["wsrep_node_name"] %>
+<% else %> #try to obtain the local hostname using Ohai
+wsrep_node_name             = <%= node['hostname'] %>
+<% end %>
+<% if !node["percona"]["cluster"]["wsrep_node_address"].empty? %>
 wsrep_node_address             = <%= node["percona"]["cluster"]["wsrep_node_address"] %>
+<% else %> #try to obtain the local IP using Ohai
+wsrep_node_address             = <%= node['ipaddress'] %>
+<% end %>
 innodb_locks_unsafe_for_binlog = <%= node["percona"]["cluster"]["innodb_locks_unsafe_for_binlog"] %>
 innodb_autoinc_lock_mode       = <%= node["percona"]["cluster"]["innodb_autoinc_lock_mode"] %>
 
