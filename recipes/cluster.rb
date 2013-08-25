@@ -14,7 +14,7 @@ when "rhel"
   package "Percona-XtraDB-Cluster-server"
 end
 
-include_recipe "percona::configure_server"
+include_recipe "percona::configure_cluster_server"
 
 # access grants
 include_recipe "percona::access_grants"
