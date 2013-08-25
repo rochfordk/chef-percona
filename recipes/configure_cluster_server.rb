@@ -35,18 +35,21 @@ service "mysql" do
   supports :restart => true
   #If this is the first node we'll change the start and resatart commands to take advantage of the bootstrap-pxc command
   #Get the cluster address and extract the first node IP
-  wsrep_cluster_address = node["percona"]["cluster"]["wsrep_cluster_address"]
-  wsrep_cluster_address.slice! "gcomm://"
-  cluster_nodes = wsrep_cluster_address.split(',')
+  #Chef::Log.info("****COE-LOG 1Setting Start Command #{node["percona"]["cluster"]["wsrep_cluster_address"]}")
+  cluster_address = node["percona"]["cluster"]["wsrep_cluster_address"].dup
+  cluster_address.slice! "gcomm://"
   
-  Chef::Log.info("****COE-LOG 1Setting Start Command #{cluster_nodes[0]}")
+  cluster_nodes = cluster_address.split(',')
+  #Chef::Log.info("****COE-LOG 1Setting Start Command #{node["percona"]["cluster"]["wsrep_cluster_address"]}")
+   
+  #Chef::Log.info("****COE-LOG 1Setting Start Command #{cluster_nodes[0]}")
   localipaddress=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
-  Chef::Log.info("****COE-LOG 2Setting Start Command #{localipaddress}")
+  #Chef::Log.info("****COE-LOG 2Setting Start Command #{localipaddress}")
   if cluster_nodes[0] == localipaddress
-	Chef::Log.info('****COE-LOG - They are the same!')
-	Chef::Log.info('****COE-LOG 3Setting Start Command')
+	#Chef::Log.info('****COE-LOG - They are the same!')
+	#Chef::Log.info('****COE-LOG 3Setting Start Command')
 	start_command "/usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
-	Chef::Log.info('****COE-LOG Setting Re-Start Command')
+	#Chef::Log.info('****COE-LOG Setting Re-Start Command')
 	restart_command "/usr/bin/service mysql stop && /usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
   end
   
