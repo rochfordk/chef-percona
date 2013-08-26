@@ -2,6 +2,7 @@ percona = node["percona"]
 server  = percona["server"]
 conf    = percona["conf"]
 mysqld  = (conf && conf["mysqld"]) || {}
+firstNode = false
 
 # construct an encrypted passwords helper -- giving it the node and bag name
 passwords = EncryptedPasswords.new(node, percona["encrypted_data_bag"])
@@ -46,6 +47,7 @@ service "mysql" do
   localipaddress=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
   #Chef::Log.info("****COE-LOG 2Setting Start Command #{localipaddress}")
   if cluster_nodes[0] == localipaddress
+	firstNode = true
 	#Chef::Log.info('****COE-LOG - They are the same!')
 	#Chef::Log.info('****COE-LOG 3Setting Start Command')
 	start_command "/usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
@@ -109,24 +111,26 @@ end
 #####################################
 ## CONFIGURE ACCESS FOR REPLICATION
 #####################################
-# Create thselect user from e user
-execute "add-mysql-user-sstuser" do
-    command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"CREATE USER 'sstuser'@'localhost' IDENTIFIED BY 's3cretPass'\""
-    action :run
-    Chef::Log.info('****COE-LOG add-mysql-user-sstuser')
-    only_if { `/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
-end
-# Grant priviledges
-execute "grant-priviledges-to-sstuser" do
-	Chef::Log.info('****COE-LOG grant-priviledges-to-sstuser')
-    command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"GRANT RELOAD, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'sstuser'@'localhost'\""
-    action :run
-#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
-end
-# Flush
-execute "flush-mysql-priviledges" do
-	Chef::Log.info('****COE-LOG flush-mysql-priviledges')
-    command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"FLUSH PRIVILEGES\""
-    action :run
-#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
+if firstNode
+	# Create thselect user from e user
+	execute "add-mysql-user-sstuser" do
+		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"CREATE USER 'sstuser'@'localhost' IDENTIFIED BY 's3cretPass'\""
+		action :run
+		Chef::Log.info('****COE-LOG add-mysql-user-sstuser')
+		only_if { `/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
+	end
+	# Grant priviledges
+	execute "grant-priviledges-to-sstuser" do
+		Chef::Log.info('****COE-LOG grant-priviledges-to-sstuser')
+		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"GRANT RELOAD, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'sstuser'@'localhost'\""
+		action :run
+	#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
+	end
+	# Flush
+	execute "flush-mysql-priviledges" do
+		Chef::Log.info('****COE-LOG flush-mysql-priviledges')
+		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"FLUSH PRIVILEGES\""
+		action :run
+	#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
+	end
 end
