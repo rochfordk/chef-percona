@@ -2,7 +2,8 @@ percona = node["percona"]
 server  = percona["server"]
 conf    = percona["conf"]
 mysqld  = (conf && conf["mysqld"]) || {}
-firstNode = false
+firstnode = false
+headnode = ""
 
 # construct an encrypted passwords helper -- giving it the node and bag name
 passwords = EncryptedPasswords.new(node, percona["encrypted_data_bag"])
@@ -39,10 +40,11 @@ service "mysql" do
   cluster_address = node["percona"]["cluster"]["wsrep_cluster_address"].dup
   cluster_address.slice! "gcomm://"
   cluster_nodes = cluster_address.split(',')
+  headnode = cluster_nodes[0] 
   localipaddress=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
   
   if cluster_nodes[0] == localipaddress
-	firstNode = true
+	firstnode = true
 	start_command "/usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
 	restart_command "/usr/bin/service mysql stop && /usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
   end
@@ -79,7 +81,16 @@ template percona["main_config_file"] do
   owner "root"
   group "root"
   mode 0744
-  notifies :restart, "service[mysql]", :immediately if node["percona"]["auto_restart"]
+  # If this is not the first node wait until the first node becomes available before restarting the service
+  if firstnode
+	notifies :restart, "service[mysql]", :immediately if node["percona"]["auto_restart"]
+  else
+	Chef::Log.info("****COE-LOG: Checking for MySQL service on #{headnode}, port 4567")
+	while !PortCheck.is_port_open headnode, "4567"
+		Chef::Log.info("****COE-LOG: waiting for first cluster node to become available")
+		sleep 10
+    end
+  end
 end
 
 # now let's set the root password only if this is the initial install
@@ -100,10 +111,11 @@ template "/etc/mysql/debian.cnf" do
   only_if { node["platform_family"] == "debian" }
 end
 
+
 #####################################
 ## CONFIGURE ACCESS FOR SST REPLICATION
 #####################################
-if firstNode
+if firstnode
 	sstAuth = node["percona"]["cluster"]["wsrep_sst_auth"].split(':')
 	sstAuthName = sstAuth[0]
 	sstauthPass = sstAuth[1]
@@ -111,19 +123,19 @@ if firstNode
 	execute "add-mysql-user-sstuser" do
 		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"CREATE USER '#{sstAuthName}'@'localhost' IDENTIFIED BY '#{sstauthPass}'\""
 		action :run
-		Chef::Log.info('****COE-LOG add-mysql-user-sstuser')
+		#Chef::Log.info('****COE-LOG add-mysql-user-sstuser')
 		only_if { `/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
 	end
 	# Grant priviledges
 	execute "grant-priviledges-to-sstuser" do
-		Chef::Log.info('****COE-LOG grant-priviledges-to-sstuser')
+		#Chef::Log.info('****COE-LOG grant-priviledges-to-sstuser')
 		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"GRANT RELOAD, LOCK TABLES, REPLICATION CLIENT ON *.* TO '#{sstAuthName}'@'localhost'\""
 		action :run
 	#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
 	end
 	# Flush
 	execute "flush-mysql-priviledges" do
-		Chef::Log.info('****COE-LOG flush-mysql-priviledges')
+		#Chef::Log.info('****COE-LOG flush-mysql-priviledges')
 		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"FLUSH PRIVILEGES\""
 		action :run
 	#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
