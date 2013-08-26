@@ -36,22 +36,14 @@ service "mysql" do
   supports :restart => true
   #If this is the first node we'll change the start and resatart commands to take advantage of the bootstrap-pxc command
   #Get the cluster address and extract the first node IP
-  #Chef::Log.info("****COE-LOG 1Setting Start Command #{node["percona"]["cluster"]["wsrep_cluster_address"]}")
   cluster_address = node["percona"]["cluster"]["wsrep_cluster_address"].dup
   cluster_address.slice! "gcomm://"
-  
   cluster_nodes = cluster_address.split(',')
-  #Chef::Log.info("****COE-LOG 1Setting Start Command #{node["percona"]["cluster"]["wsrep_cluster_address"]}")
-   
-  #Chef::Log.info("****COE-LOG 1Setting Start Command #{cluster_nodes[0]}")
   localipaddress=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
-  #Chef::Log.info("****COE-LOG 2Setting Start Command #{localipaddress}")
+  
   if cluster_nodes[0] == localipaddress
 	firstNode = true
-	#Chef::Log.info('****COE-LOG - They are the same!')
-	#Chef::Log.info('****COE-LOG 3Setting Start Command')
 	start_command "/usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
-	#Chef::Log.info('****COE-LOG Setting Re-Start Command')
 	restart_command "/usr/bin/service mysql stop && /usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
   end
   
@@ -109,12 +101,15 @@ template "/etc/mysql/debian.cnf" do
 end
 
 #####################################
-## CONFIGURE ACCESS FOR REPLICATION
+## CONFIGURE ACCESS FOR SST REPLICATION
 #####################################
 if firstNode
+	sstAuth = node["percona"]["cluster"]["wsrep_sst_auth"].split(':')
+	sstAuthName = sstAuth[0]
+	sstauthPass = sstAuth[1]
 	# Create thselect user from e user
 	execute "add-mysql-user-sstuser" do
-		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"CREATE USER 'sstuser'@'localhost' IDENTIFIED BY 's3cretPass'\""
+		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"CREATE USER '#{sstAuthName}'@'localhost' IDENTIFIED BY '#{sstauthPass}'\""
 		action :run
 		Chef::Log.info('****COE-LOG add-mysql-user-sstuser')
 		only_if { `/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
@@ -122,7 +117,7 @@ if firstNode
 	# Grant priviledges
 	execute "grant-priviledges-to-sstuser" do
 		Chef::Log.info('****COE-LOG grant-priviledges-to-sstuser')
-		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"GRANT RELOAD, LOCK TABLES, REPLICATION CLIENT ON *.* TO 'sstuser'@'localhost'\""
+		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"GRANT RELOAD, LOCK TABLES, REPLICATION CLIENT ON *.* TO '#{sstAuthName}'@'localhost'\""
 		action :run
 	#DEL    only_if { `/usr/bin/mysql -u root -p#{mysql_password} -D mysql -r -B -N -e \"SELECT COUNT(*) FROM user where User='sstuser' and Host = 'localhost'"`.to_i == 0 }
 	end
