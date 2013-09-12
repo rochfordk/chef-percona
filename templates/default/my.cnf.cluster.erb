@@ -69,7 +69,7 @@ wsrep_node_name             = <%= node['hostname'] %>
 wsrep_node_address             = <%= node["percona"]["cluster"]["wsrep_node_address"] %>
 <% else %> #try to obtain the local IP using Ohai
 #wsrep_node_address             = <%= node['ipaddress'] %>
-wsrep_node_address             = <%=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first%>
+wsrep_node_address             = <%=  node["network"]["interfaces"]["eth0"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first%>
 <% end %>
 innodb_locks_unsafe_for_binlog = <%= node["percona"]["cluster"]["innodb_locks_unsafe_for_binlog"] %>
 innodb_autoinc_lock_mode       = <%= node["percona"]["cluster"]["innodb_autoinc_lock_mode"] %>
