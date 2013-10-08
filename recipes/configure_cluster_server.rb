@@ -35,14 +35,14 @@ user    = mysqld["username"] || server["username"]
 # define the service
 service "mysql" do
   supports :restart => true
+  
   #If this is the first node we'll change the start and resatart commands to take advantage of the bootstrap-pxc command
   #Get the cluster address and extract the first node IP
   cluster_address = node["percona"]["cluster"]["wsrep_cluster_address"].dup
   cluster_address.slice! "gcomm://"
   cluster_nodes = cluster_address.split(',')
   headnode = cluster_nodes[0] 
-  localipaddress=  node["network"]["interfaces"]["eth0"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
-  
+  localipaddress=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
   if cluster_nodes[0] == localipaddress
 	firstnode = true
 	start_command "/usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
@@ -86,9 +86,12 @@ template percona["main_config_file"] do
 	notifies :restart, "service[mysql]", :immediately if node["percona"]["auto_restart"]
   else
 	Chef::Log.info("****COE-LOG: Checking for MySQL service on #{headnode}, port 4567")
-	while !PortCheck.is_port_open headnode, "4567"
-		Chef::Log.info("****COE-LOG: waiting for first cluster node to become available")
-		sleep 10
+	i=0
+	while !PortCheck.is_port_open headnode, "4567" 
+		Chef::Log.info("****COE-LOG: waiting for first cluster node to become available - sleep 60 seconds - #{i} of 6")
+		i+=1
+		break if i==6 # break out after waiting 6 intervals
+		sleep 60 # sleep for 60 seconds before retry
     end
   end
 end
@@ -119,7 +122,7 @@ if firstnode
 	sstAuth = node["percona"]["cluster"]["wsrep_sst_auth"].split(':')
 	sstAuthName = sstAuth[0]
 	sstauthPass = sstAuth[1]
-	# Create thselect user from e user
+	# Create the state transfer user
 	execute "add-mysql-user-sstuser" do
 		command "/usr/bin/mysql -u root -p#{passwords.root_password} -D mysql -r -B -N -e \"CREATE USER '#{sstAuthName}'@'localhost' IDENTIFIED BY '#{sstauthPass}'\""
 		action :run
