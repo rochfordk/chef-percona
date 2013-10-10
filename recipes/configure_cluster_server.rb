@@ -42,7 +42,7 @@ service "mysql" do
   cluster_address.slice! "gcomm://"
   cluster_nodes = cluster_address.split(',')
   headnode = cluster_nodes[0] 
-  localipaddress=  node["network"]["interfaces"]["eth1"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
+  localipaddress=  node["network"]["interfaces"]["eth0"]["addresses"].select {|address, data| data["family"] == "inet" }.first.first
   if cluster_nodes[0] == localipaddress
 	firstnode = true
 	start_command "/usr/bin/service mysql bootstrap-pxc" #if platform?("ubuntu")
